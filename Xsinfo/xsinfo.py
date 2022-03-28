@@ -36,8 +36,11 @@ def get_sinfo() -> pd.DataFrame:
     cmd += 'Threads:4,'
     cmd += 'Memory:12,'
     cmd += 'FreeMem:12'
+    print(cmd)
     # get this rich output of sinfo
     sinfo = [n.split() for n in subprocess.getoutput(cmd).split('\n')]
+    print(sinfo)
+    print(sinfods)
     sinfo = pd.DataFrame(sinfo, columns=[
         'node', 'partition', 'status', 'cpu_load', 'cpus',
         'socket', 'cores', 'threads', 'mem', 'free_mem'
@@ -228,8 +231,8 @@ def summarize(sinfo_cpus: pd.DataFrame):
     """
     sinfo_cpus.sort_values('cpus_avail', ascending=False, inplace=True)
     for cpu_mem in ['cpu', 'mem']:
-        print('# Showing nodes per %s of %s load:' % ('%', cpu_mem))
-        print('%s\tcpus\tmem\tav \t±\tpart\tnodes')
+        print('\n# Showing nodes per %s of %s load:' % ('%', cpu_mem))
+        print('%s\tcpus\tmem(gb)\tav\t±\tpart(s)\tnodes' % '%')
         for load, load_pd in sinfo_cpus.groupby('%s_load_bin' % cpu_mem):
             if not load_pd.shape[0]:
                 continue
