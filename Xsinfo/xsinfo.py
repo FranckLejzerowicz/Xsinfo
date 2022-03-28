@@ -66,9 +66,9 @@ def get_sinfo(output: str, refresh: bool) -> pd.DataFrame:
         sinfo = pd.read_table(output, sep='\t')
     else:
         print('Run sinfo')
-        # sinfo = [n.split() for n in subprocess.getoutput(cmd).split('\n')]
-        with open('/Users/franck/programs/Xsinfo/Xsinfo/test/snap.txt') as o:
-            sinfo = yaml.load(o, Loader=yaml.Loader)
+        sinfo = [n.split() for n in subprocess.getoutput(cmd).split('\n')]
+        # with open('/Users/franck/programs/Xsinfo/Xsinfo/test/snap.txt') as o:
+        #     sinfo = yaml.load(o, Loader=yaml.Loader)
         sinfo = pd.DataFrame(sinfo, columns=[
             'node', 'partition', 'status', 'cpu_load', 'cpus',
             'socket', 'cores', 'threads', 'mem', 'free_mem'])
