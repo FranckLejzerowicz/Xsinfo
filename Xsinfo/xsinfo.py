@@ -287,7 +287,7 @@ def summarize(sinfo_cpus: pd.DataFrame):
             parts = ','.join([x.strip('*') for x in set(load_pd.partition)])
             ncpus = load_pd.cpus_avail.sum()
             mem = load_pd.free_mem.sum()
-            mem_av = load_pd.free_mem.mean()
+            mem_av = round(load_pd.free_mem.mean(), 2)
             mem_sd = round(load_pd.free_mem.std(), 2)
             print('%s%s\t%s\t%s\t%s\t%s\t%s\t%s' % (
                 load, '%', ncpus, mem, mem_av, mem_sd, parts, nodes))
