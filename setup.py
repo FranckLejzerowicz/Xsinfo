@@ -53,7 +53,8 @@ setup(
     url="https://github.com/FranckLejzerowicz/Xsinfo",
     packages=find_packages(),
     install_requires=[
-        "click"
+        "click",
+        "pandas"
     ],
     classifiers=classifiers,
     entry_points={'console_scripts': standalone},
