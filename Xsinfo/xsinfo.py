@@ -223,22 +223,6 @@ def bin_loads(sinfo_cpus: pd.DataFrame):
         sinfo_cpus['%s_bin' % load] = pd.cut(sinfo_cpus[load], q, labels=labels)
 
 
-def show_prints(shared: dict):
-    """
-    Just shows the partitions sharing the same nodes.
-
-    Parameters
-    ----------
-    shared : dict
-        partitions sharing the same nodes.
-    """
-    for k, vs in shared.items():
-        print('%s\nSame nodes between partitions:' % ('-' * 35))
-        for v in vs:
-            print('-> "%s" and "%s"' % (k, v))
-        print('-' * 35)
-
-
 def get_nodes(load_pd: pd.DataFrame) -> dict:
     """
     Collect all the cores of each node that have the current amount of
@@ -309,6 +293,55 @@ def summarize(sinfo_cpus: pd.DataFrame):
                 load, '%', ncpus, mem, mem_av, mem_sd, parts, nodes))
 
 
+def show_shared(shared: dict):
+    """
+    Just shows the partitions sharing the same nodes.
+
+    Parameters
+    ----------
+    shared : dict
+        partitions sharing the same nodes.
+    """
+    for k, vs in shared.items():
+        print('\n%s\nSame nodes between partitions:' % ('-' * 35))
+        for v in vs:
+            print('-> "%s" and "%s"' % (k, v))
+        print('-' * 35, '\n')
+
+
+def show_sinfo_cpu(sinfo_cpu: pd.DataFrame) -> None:
+    """
+    Just shows the sinfo table reduced to fields of interest.
+    This can be collect from the stdout by other tools in order to help
+    picking nodes if required (see https://github.com/FranckLejzerowicz/Xpbs).
+
+    Parameters
+    ----------
+    sinfo_cpu : pd.DataFrame
+        sinfo about the nodes with available cores.
+    """
+    sinfo_cpu.set_index('node', inplace=True)
+    sinfo_cpu.index.name = None
+    print('##')
+    print(sinfo_cpu[['cpu_load', 'cpus_avail', 'free_mem',
+                     'mem_load', 'partition']])
+
+
+def write_sinfo_cpu(output: str, sinfo_cpu: pd.DataFrame) -> None:
+    """
+
+    Parameters
+    ----------
+    output : str
+        A file path to output nodes summary, or empty string to only print.
+    sinfo_cpu : pd.DataFrame
+
+    """
+    if output:
+        sinfo_cpu.to_csv(output, index=False, sep='\t')
+        print('\n# sinfo written in "%s' % output)
+
+
 def run_xsinfo(output: str, torque: bool) -> None:
     """Run the routine of collecting the nodes/cpus information and summarize it
     for different dimension, or get possible usage solutions for a users need.
@@ -327,19 +360,14 @@ def run_xsinfo(output: str, torque: bool) -> None:
         #     raise IOError('No SLURM scheduler ("sinfo" not available)')
         sinfo = get_sinfo()
         shared = get_nodes_info(sinfo)
+
         sinfo_cpu = expand_cpus(sinfo)
         change_dtypes(sinfo_cpu)
         keep_avail_nodes(sinfo_cpu)
         bin_loads(sinfo_cpu)
         summarize(sinfo_cpu)
 
-        show_prints(shared)
+        write_sinfo_cpu(output, sinfo_cpu)
 
-        sinfo_cpu.set_index('node', inplace=True)
-        sinfo_cpu.index.name = None
-        print('##')
-        print(sinfo_cpu[['cpu_load', 'cpus_avail', 'free_mem',
-                         'mem_load', 'partition']])
-        if output:
-            sinfo_cpu.to_csv(output, sep='\t')
-            print('# Written:', output)
+        show_shared(shared)
+        show_sinfo_cpu(sinfo_cpu)
