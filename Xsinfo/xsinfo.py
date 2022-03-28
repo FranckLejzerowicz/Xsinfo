@@ -6,17 +6,41 @@
 # The full license is in the file LICENSE, distributed with this software.
 # ----------------------------------------------------------------------------
 
+import os
+import glob
+import yaml
 import math
-import itertools
 import subprocess
-
 import pandas as pd
+from datetime import datetime
+from os.path import dirname, isdir, isfile
 
 
-def get_sinfo() -> pd.DataFrame:
+def get_today_output():
+    """Get the path to the output file for today's node usage.
+
+    Returns
+    -------
+    output : str
+        path
+    """
+    output_dir = '%s/.xsinfo' % os.path.expanduser('~')
+    if not isdir(output_dir):
+        os.makedirs(output_dir)
+    today = str(datetime.now().date())
+    output = output_dir + '/' + today + '.tsv'
+    return output
+
+
+def get_sinfo(output: str, refresh: bool) -> pd.DataFrame:
     """
     Run subprocess to collect the nodes and cores
     that are idle and available for compute.
+
+    Parameters
+    ----------
+    output : str
+    refresh: bool
 
     Returns
     -------
@@ -36,16 +60,62 @@ def get_sinfo() -> pd.DataFrame:
     cmd += 'Threads:4,'
     cmd += 'Memory:12,'
     cmd += 'FreeMem:12'
-    print(cmd)
     # get this rich output of sinfo
-    sinfo = [n.split() for n in subprocess.getoutput(cmd).split('\n')]
-    print(sinfo)
-    print(sinfods)
-    sinfo = pd.DataFrame(sinfo, columns=[
-        'node', 'partition', 'status', 'cpu_load', 'cpus',
-        'socket', 'cores', 'threads', 'mem', 'free_mem'
-    ])
+    if isfile(output) and not refresh:
+        print('Read', output)
+        sinfo = pd.read_table(output, sep='\t')
+    else:
+        print('Run sinfo')
+        # sinfo = [n.split() for n in subprocess.getoutput(cmd).split('\n')]
+        with open('/Users/franck/programs/Xsinfo/Xsinfo/test/snap.txt') as o:
+            sinfo = yaml.load(o, Loader=yaml.Loader)
+        sinfo = pd.DataFrame(sinfo, columns=[
+            'node', 'partition', 'status', 'cpu_load', 'cpus',
+            'socket', 'cores', 'threads', 'mem', 'free_mem'])
     return sinfo
+
+
+def find_series(cs: list) -> str:
+    """
+    Get a condensed representation of the series of cpus numbers for a node.
+
+    Parameters
+    ----------
+    cs : list
+        current list of numbers corresponding to cpus nodes.
+
+    Returns
+    -------
+    cpus : str
+        Condensed representation of nodes number (as ranges).
+    """
+    mini, maxi = min(cs), max(cs)
+    vals = []
+    cur = [mini]
+    for c in cs[:-1]:
+        if not cur:
+            cur.append(c)
+            continue
+        if c + 1 not in cs:
+            cur.append(c)
+            vals.append(list(cur))
+            cur = []
+    cur.append(cs[-1])
+    vals.append(list(cur))
+    cpus = ','.join(['-'.join(map(str, sorted(set(x)))) for x in vals])
+    return cpus
+
+
+def condense_node_cpus(names):
+    d = {}
+    for name in names:
+        name_split = name.split('-')
+        d.setdefault(name_split[0], []).append(int(name_split[1]))
+
+    nodes = []
+    for n, cs in d.items():
+        nodes.append('%s-[%s]' % (n, find_series(sorted(cs))))
+    return ','.join(nodes)
 
 
 def expand_cpus(sinfo: pd.DataFrame) -> pd.DataFrame:
@@ -69,64 +139,6 @@ def expand_cpus(sinfo: pd.DataFrame) -> pd.DataFrame:
     return sinfo_cpu
 
 
-def subset_it(sinfo: pd.DataFrame, it: tuple, idx: int) -> pd.DataFrame:
-    """Subset the sinfo data frame to either one of two partitions.
-
-    Parameters
-    ----------
-    sinfo : pd.DataFrame
-        Main data frame from which two data frames are compared.
-    it : tuple
-        Names of the two partitions corresponding to the two
-        compared data frames.
-    idx : int
-        Either 0 or 1 for the first of second of the two
-        compared data frames.
-
-    Returns
-    -------
-    tab : pd.DataFrame
-        sinfo data frame corresponding to one of two partitions.
-    """
-    tab = pd.DataFrame()
-    if it[idx] in set(sinfo.partition):
-        tab = sinfo.loc[sinfo.partition == it[idx]]
-        tab = tab.drop(columns='partition')
-        tab.index = range(tab.shape[0])
-    return tab
-
-
-def get_nodes_info(sinfo: pd.DataFrame) -> dict:
-    """
-    Reduce the sinfo table already reduced to the nodes having available cores
-    in order to only keep the nodes available for one of the partitions across
-    which they are assigned.
-
-    Parameters
-    ----------
-    sinfo : pd.DataFrame
-        sinfo about the nodes with available cores.
-
-    Returns
-    -------
-    shared : dict
-        List of partitions (value) having the same nodes as one partition (key).
-    """
-    shared = {}
-    for it in itertools.combinations(sorted(sinfo.partition.unique()), 2):
-        it1, it2 = subset_it(sinfo, it, 0), subset_it(sinfo, it, 1)
-        if it1.shape[0] and it1.shape[1] and it1.equals(it2):
-            order = it
-            if it[1].endswith('*'):
-                order = (it[0], it[1][:-1])
-            elif it[0].endswith('*'):
-                order = (it[1], it[0][:-1])
-            rm_index = sinfo[sinfo.partition == order[0]].index
-            sinfo.drop(index=rm_index, inplace=True)
-            shared.setdefault(order[-1], []).append(order[0])
-    return shared
-
-
 def keep_avail_nodes(sinfo_cpu: pd.DataFrame):
     """Filter nodes that are either idle but reserved, or that are allocated,
     i.e. that do not have a single available cpu.
@@ -136,9 +148,9 @@ def keep_avail_nodes(sinfo_cpu: pd.DataFrame):
     sinfo_cpu : pd.DataFrame
         sinfo about the nodes with available cores expanded per current usage.
     """
-    avail_cpus = sinfo_cpu.loc[(sinfo_cpu.status == 'reserved') |
+    avail = sinfo_cpu.loc[(sinfo_cpu.status == 'reserved') |
                                (sinfo_cpu.cpus_avail == 0)]
-    sinfo_cpu.drop(index=avail_cpus.index, inplace=True)
+    sinfo_cpu.drop(index=avail.index, inplace=True)
 
 
 def change_dtypes(sinfo_cpu: pd.DataFrame) -> None:
@@ -176,49 +188,6 @@ def bin_loads(sinfo_cpus: pd.DataFrame):
         sinfo_cpus['%s_bin' % load] = pd.cut(sinfo_cpus[load], q, labels=labels)
 
 
-def get_nodes(load_pd: pd.DataFrame) -> dict:
-    """
-    Collect all the cores of each node that have the current amount of
-    memory load, cpu load or other criteria for resource.
-
-    Parameters
-    ----------
-    load_pd : pd.DataFrame
-        subset of the relevant sinfo for the current memory load,
-        cpu load or other criteria for resource.
-
-    Returns
-    -------
-    nodes : dict
-        core per nodes.
-    """
-    nodes = {}
-    for node in load_pd.node:
-        node_split = node.split('-')
-        nodes.setdefault(node_split[0], []).append(node_split[1])
-    return nodes
-
-
-def format_nodes(nodes: dict) -> str:
-    """
-    Get a string representing a series of nodes. This format can be
-    passed to the `--nodelist` option in Slurm.
-
-    Parameters
-    ----------
-    nodes : dict
-        cores per node.
-
-    Returns
-    -------
-    cpus_per_node_str : str
-        cores per node separated by commas and hyphens, as taken in by Slurm.
-    """
-    cpus_per_node = ['%s-[%s]' % (n, ','.join(cs)) for n, cs in nodes.items()]
-    cpus_per_node_str = ','.join(cpus_per_node)
-    return cpus_per_node_str
-
-
 def summarize(sinfo_cpus: pd.DataFrame):
     """
     Show some node usage stats in order for the use to select nodes
@@ -229,37 +198,37 @@ def summarize(sinfo_cpus: pd.DataFrame):
     sinfo_cpus : pd.DataFrame
         sinfo about the nodes with available cores.
     """
-    sinfo_cpus.sort_values('cpus_avail', ascending=False, inplace=True)
+    show_sinfo_cpus = sinfo_cpus.drop(columns=['partition', 'status'])
+    show_sinfo_cpus.sort_values('cpus_avail', ascending=False, inplace=True)
+    show_sinfo_cpus = show_sinfo_cpus.drop_duplicates()
     for cpu_mem in ['cpu', 'mem']:
         print('\n# Showing nodes per %s of %s load:' % ('%', cpu_mem))
-        print('%s\tcpus\tmem(gb)\tav\t±\tpart(s)\tnodes' % '%')
-        for load, load_pd in sinfo_cpus.groupby('%s_load_bin' % cpu_mem):
+        print('%s\tcpus\tmem(gb)\tav\t±\tnodes' % '%')
+        for load, load_pd in show_sinfo_cpus.groupby('%s_load_bin' % cpu_mem):
             if not load_pd.shape[0]:
                 continue
-            nodes = format_nodes(get_nodes(load_pd))
-            parts = ','.join([x.strip('*') for x in set(load_pd.partition)])
+            nodes = condense_node_cpus(load_pd.node.tolist())
             ncpus = load_pd.cpus_avail.sum()
             mem = load_pd.free_mem.sum()
             mem_av = round(load_pd.free_mem.mean(), 2)
             mem_sd = round(load_pd.free_mem.std(), 2)
-            print('%s%s\t%s\t%s\t%s\t%s\t%s\t%s' % (
-                load, '%', ncpus, mem, mem_av, mem_sd, parts, nodes))
+            print('%s%s\t%s\t%s\t%s\t%s\t%s' % (
+                load, '%', ncpus, mem, mem_av, mem_sd, nodes))
 
 
-def show_shared(shared: dict):
+def show_shared(sinfo_cpu_per_partition: dict):
     """
     Just shows the partitions sharing the same nodes.
 
     Parameters
     ----------
-    shared : dict
+    sinfo_cpu_per_partition : dict
         partitions sharing the same nodes.
     """
-    for k, vs in shared.items():
-        print('\n%s\nSame nodes between partitions:' % ('-' * 35))
-        for v in vs:
-            print('-> "%s" and "%s"' % (k, v))
-        print('-' * 35, '\n')
+    print('\n%s\nAvailable nodes/cpus across partitions:' % ('-' * 35))
+    for parts, nodes in sinfo_cpu_per_partition.items():
+        print(' -', parts, '\t:\t', nodes)
+    print('-' * 35, '\n')
 
 
 def show_sinfo_cpu(sinfo_cpu: pd.DataFrame) -> None:
@@ -280,47 +249,87 @@ def show_sinfo_cpu(sinfo_cpu: pd.DataFrame) -> None:
                      'mem_load', 'partition']])
 
 
-def write_sinfo_cpu(output: str, sinfo_cpu: pd.DataFrame) -> None:
+def write_sinfo(sinfo: pd.DataFrame, output: str, refresh: bool) -> None:
     """
 
     Parameters
     ----------
+    sinfo : pd.DataFrame
     output : str
         A file path to output nodes summary, or empty string to only print.
-    sinfo_cpu : pd.DataFrame
-
+    refresh: bool
     """
-    if output:
-        sinfo_cpu.to_csv(output, index=False, sep='\t')
+    today = str(datetime.now().date())
+    outs = glob.glob('%s/*' % dirname(output))
+    for previous in [x for x in outs if today not in x]:
+        os.remove(previous)
+
+    if not isfile(output) or refresh:
+        sinfo.to_csv(output, index=False, sep='\t')
         print('\n# sinfo written in "%s' % output)
 
 
-def run_xsinfo(output: str, torque: bool) -> None:
+def write_sinfo_cpu(sinfo: pd.DataFrame, output: str, refresh: bool) -> None:
+    """
+
+    Parameters
+    ----------
+    sinfo : pd.DataFrame
+    output : str
+        A file path to output nodes summary, or empty string to only print.
+    refresh: bool
+    """
+    today = str(datetime.now().date())
+    outs = glob.glob('%s/*' % dirname(output))
+    for previous in [x for x in outs if today not in x]:
+        os.remove(previous)
+
+    if not isfile(output) or refresh:
+        sinfo.to_csv(output, index=False, sep='\t')
+        print('\n# sinfo written in "%s' % output)
+
+
+def get_shared_nodes(sinfo_cpu):
+    sinfo_cpu_per_partition = sinfo_cpu.groupby(
+        'node'
+    ).apply(
+        lambda x: ','.join(x['partition'])).reset_index(
+    ).groupby(
+        0
+    ).node.apply(
+        condense_node_cpus
+    ).to_dict()
+    return sinfo_cpu_per_partition
+
+
+def run_xsinfo(torque: bool, refresh: bool) -> None:
     """Run the routine of collecting the nodes/cpus information and summarize it
     for different dimension, or get possible usage solutions for a users need.
 
     Parameters
     ----------
-    output : str
-        A file path to output nodes summary, or empty string to only print.
     torque : bool
         Whether the scheduler is PBS/Torque
+    refresh : str
+        Whether to update any sinfo snapshot file written today in ~/.slurm..
     """
     if torque:
         print('No node collection mechanism yet for PBS/Torque!')
     else:
         # if subprocess.getstatusoutput('sinfo')[0]:
         #     raise IOError('No SLURM scheduler ("sinfo" not available)')
-        sinfo = get_sinfo()
-        shared = get_nodes_info(sinfo)
+        output = get_today_output()
 
+        sinfo = get_sinfo(output, refresh)
         sinfo_cpu = expand_cpus(sinfo)
         change_dtypes(sinfo_cpu)
         keep_avail_nodes(sinfo_cpu)
+
+        sinfo_cpu_per_partition = get_shared_nodes(sinfo_cpu)
+
         bin_loads(sinfo_cpu)
         summarize(sinfo_cpu)
 
-        write_sinfo_cpu(output, sinfo_cpu)
-
-        show_shared(shared)
+        write_sinfo(sinfo, output, refresh)
+        show_shared(sinfo_cpu_per_partition)
         show_sinfo_cpu(sinfo_cpu)

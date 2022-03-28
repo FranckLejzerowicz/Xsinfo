@@ -13,18 +13,18 @@ from Xsinfo import __version__
 
 @click.command()
 @click.option(
-	"-o", "--output", default='', type=str,
-	help="Output file to write the nodes availability (or only show in stdout)."
-)
-@click.option(
 	"--torque/--no-torque", default=False, show_default=True,
 	help="Switch from Slurm to Torque"
+)
+@click.option(
+	"--refresh", "--no-refresh", default='', type=str,
+	help="Whether to update any sinfo snapshot file written today in ~/.slurm."
 )
 @click.version_option(__version__, prog_name="Xsinfo")
 
 
-def standalone_xsinfo(output, torque):
-	run_xsinfo(output, torque)
+def standalone_xsinfo(torque, refresh):
+	run_xsinfo(torque, refresh)
 
 
 if __name__ == "__main__":
