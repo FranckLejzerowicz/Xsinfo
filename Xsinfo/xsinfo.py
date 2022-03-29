@@ -157,9 +157,6 @@ def change_dtypes(sinfo_cpu: pd.DataFrame) -> None:
     sinfo_cpu['cpus_avail'] = sinfo_cpu['cpus_avail'].astype(float)
     sinfo_cpu['cpu_load'] = sinfo_cpu['cpu_load'].astype(float)
     sinfo_cpu['mem'] = sinfo_cpu['mem'].astype(float)
-    print(sinfo_cpu)
-    for i in sinfo_cpu['free_mem']:
-        print(i)
     sinfo_cpu['free_mem'] = sinfo_cpu['free_mem'].astype(float)
     sinfo_cpu['mem_load'] = 100*(1-(sinfo_cpu['free_mem'] / sinfo_cpu['mem']))
     sinfo_cpu['mem_load'] = round(sinfo_cpu['mem_load'].clip(0), 4)
