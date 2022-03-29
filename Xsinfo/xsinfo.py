@@ -8,12 +8,12 @@
 
 import os
 import glob
-import yaml
 import math
 import subprocess
 import pandas as pd
 from datetime import datetime
 from os.path import dirname, isdir, isfile
+# import yaml
 
 
 def get_today_output():
@@ -37,11 +37,6 @@ def get_sinfo() -> pd.DataFrame:
     Run subprocess to collect the nodes and cores
     that are idle and available for compute.
 
-    Parameters
-    ----------
-    output : str
-    refresh: bool
-
     Returns
     -------
     sinfo : pd.DataFrame
@@ -61,10 +56,9 @@ def get_sinfo() -> pd.DataFrame:
     cmd += 'Memory:12,'
     cmd += 'FreeMem:12'
     # get this rich output of sinfo
-    print('Run sinfo')
-    # sinfo = [n.split() for n in subprocess.getoutput(cmd).split('\n')]
-    with open('/Users/franck/programs/Xsinfo/Xsinfo/test/snap.txt') as o:
-        sinfo = yaml.load(o, Loader=yaml.Loader)
+    sinfo = [n.split() for n in subprocess.getoutput(cmd).split('\n')]
+    # with open('/Users/franck/programs/Xsinfo/Xsinfo/test/snap.txt') as o:
+    #     sinfo = yaml.load(o, Loader=yaml.Loader)
     sinfo = pd.DataFrame(sinfo, columns=[
         'node', 'partition', 'status', 'cpu_load', 'cpus',
         'socket', 'cores', 'threads', 'mem', 'free_mem'])
@@ -289,16 +283,18 @@ def get_shared_nodes(sinfo_cpu):
     return sinfo_cpu_per_partition
 
 
-def run_xsinfo(torque: bool, refresh: bool) -> None:
+def run_xsinfo(torque: bool, refresh: bool, show: bool) -> None:
     """Run the routine of collecting the nodes/cpus information and summarize it
     for different dimension, or get possible usage solutions for a users need.
 
     Parameters
     ----------
     torque : bool
-        Whether the scheduler is PBS/Torque
+        Switch from Slurm to Torque
     refresh : str
-        Whether to update any sinfo snapshot file written today in ~/.slurm..
+        Update any sinfo snapshot file written today in ~/.slurm
+    show : bool
+        Show available cpu and memory per node on top of summaries
     """
     if torque:
         print('No node collection mechanism yet for PBS/Torque!')
@@ -307,9 +303,10 @@ def run_xsinfo(torque: bool, refresh: bool) -> None:
         #     raise IOError('No SLURM scheduler ("sinfo" not available)')
         output = get_today_output()
         if isfile(output) and not refresh:
-            print('Read', output)
+            print('> Read', output)
             sinfo_cpu = pd.read_table(output, sep='\t')
         else:
+            print('> Run sinfo')
             sinfo = get_sinfo()
             sinfo_cpu = expand_cpus(sinfo)
             change_dtypes(sinfo_cpu)
@@ -319,6 +316,6 @@ def run_xsinfo(torque: bool, refresh: bool) -> None:
             show_shared(sinfo_cpu_per_partition)
             write_sinfo(sinfo_cpu, output, refresh)
 
-        print(sinfo_cpu)
         summarize(sinfo_cpu)
-        show_sinfo_cpu(sinfo_cpu)
+        if show:
+            show_sinfo_cpu(sinfo_cpu)
