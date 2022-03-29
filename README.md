@@ -17,6 +17,7 @@ pip install -e .
 Two outputs:
 
 ### **Table**
+
 In a file located in `~/.xsinfo/YYYY-MM-DD.tsv` containing the table returned
 by the following Slurm's sinfo command and expanded with cpu_load, memory_load
 (both in % of available CPUs and memory per node), as well as the number of
@@ -28,7 +29,8 @@ sinfo --Node -h -O NodeList:10,Partition:10,StateLong:10,CPUsLoad:10,CPUsState:1
 Note: if Xsinfo is re-run the same day twice, it will not re-run this  sinfo
 command. Instead, it will read the expanded `~/.xsinfo/YYYY-MM-DD.tsv` file.
 If you need to re-run Xsinfo the same day if node usage changes that quick,
-please use the `--refresh` option.
+please use the `--refresh` option (in `~/.xsinfo/` is only kept the latest
+table).
 
 This table can be used by [Xpbs](https://github.com/FranckLejzerowicz/Xpbs) - 
 optionally - to allocate CPUs from idle nodes that have the right amount of
