@@ -123,7 +123,7 @@ def expand_cpus(sinfo: pd.DataFrame) -> pd.DataFrame:
         sinfo about the nodes with available cores expanded per current usage.
     """
     # expand the number of allocated, idle, other and total cores
-    expanded = sinfo.cpus.apply(lambda x: pd.Series(x.split('/')[:2]))
+    expanded = sinfo.cpus.apply(lambda x: pd.Series(map(int, x.split('/')[:2])))
     expanded = expanded.rename(columns={0: 'allocated', 1: 'cpus_avail'})
     sinfo_cpu = pd.concat([sinfo, expanded], axis=1)
     return sinfo_cpu
@@ -312,9 +312,9 @@ def run_xsinfo(torque: bool, refresh: bool, show: bool) -> None:
             print('> Run sinfo')
             sinfo = get_sinfo()
             sinfo_cpu = expand_cpus(sinfo)
+            keep_avail_nodes(sinfo_cpu)
             change_dtypes(sinfo_cpu)
             bin_loads(sinfo_cpu)
-            keep_avail_nodes(sinfo_cpu)
             sinfo_cpu_per_partition = get_shared_nodes(sinfo_cpu)
             show_shared(sinfo_cpu_per_partition)
             write_sinfo(sinfo_cpu, output, refresh)
