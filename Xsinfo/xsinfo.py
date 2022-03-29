@@ -299,6 +299,8 @@ def run_xsinfo(torque: bool, refresh: bool, show: bool) -> None:
     else:
         # if subprocess.getstatusoutput('sinfo')[0]:
         #     raise IOError('No SLURM scheduler ("sinfo" not available)')
+        if subprocess.getstatusoutput('Xsinfo')[0]:
+            raise IOError('Are you using Slurm? `sinfo` command not found')
         output = get_today_output()
         if isfile(output) and not refresh:
             print('> Read', output)
